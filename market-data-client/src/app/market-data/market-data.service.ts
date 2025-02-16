@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable, Subject, throwError } from 'rxjs';
-import { catchError } from 'rxjs/operators';
+import { catchError, take } from 'rxjs/operators';
 
 @Injectable({ providedIn: 'root' })
 export class MarketDataService {
@@ -21,15 +21,22 @@ export class MarketDataService {
     });
   }
 
+  updateMarketData(marketData: unknown, param: string) {
+    this.http
+      .post(
+        `${this.apiUrl}/update`,
+        { marketData, param },
+        {
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
+      .pipe(take(1))
+      .subscribe();
+  }
+
   getMarketData(): Observable<any> {
     this.connectToSSE();
-    return this.dataSubject.asObservable().pipe(
-      catchError((error) => {
-        console.error('SSE error:', error);
-        this.reconnect();
-        return throwError(error);
-      })
-    );
+    return this.dataSubject.asObservable();
   }
 
   getError() {
@@ -44,7 +51,6 @@ export class MarketDataService {
     this.eventSource = new EventSource(this.apiUrl + '/stream');
 
     this.eventSource.onopen = () => {
-      console.error('CONNECTED');
       this.errorSubject.next(false);
     };
 

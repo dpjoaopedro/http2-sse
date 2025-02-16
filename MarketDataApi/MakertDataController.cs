@@ -1,57 +1,96 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
+using System.Collections.Concurrent;
 
 [ApiController]
 [Route("api/[controller]")]
 public class MarketDataController : ControllerBase
 {
+    private static readonly ConcurrentBag<HttpResponse> _activeStreams = new ConcurrentBag<HttpResponse>();
+    private readonly Random rng = new Random();
+
     [HttpGet("stream")]
     public async Task GetMarketDataStream()
     {
         Response.ContentType = "text/event-stream";
-        var rng = new Random();
 
-        var TOTAL_OPERATIONS = 1000;
+        _activeStreams.Add(Response);
 
-        // Continue streaming individual objects
-        while (!HttpContext.RequestAborted.IsCancellationRequested)
+        try
         {
-            // Create an array to hold 5000 objects
-            var marketDataArray = new MarketData[TOTAL_OPERATIONS];
-
-            // Generate 5000 objects
-            for (int i = 0; i < TOTAL_OPERATIONS; i++)
+            var first = true;
+            while (!HttpContext.RequestAborted.IsCancellationRequested)
             {
-                marketDataArray[i] = new MarketData
+                
+                var TOTAL_OPERATIONS = 1;
+
+                if (first) {
+                    TOTAL_OPERATIONS = 50000;
+                    first = false;
+                }
+
+                var marketDataArray = new MarketData[TOTAL_OPERATIONS];
+
+                for (int i = 0; i < TOTAL_OPERATIONS; i++)
                 {
-                    Id = Guid.NewGuid(), // Generate a unique ID
-                    Symbol = "AAPL",
-                    Price = 150 + (decimal)rng.NextDouble() * 10,
-                    Timestamp = DateTime.UtcNow
-                };
+                    marketDataArray[i] = new MarketData
+                    {
+                        Id = Guid.NewGuid(),
+                        Symbol = "AAPL",
+                        Price = 1000 + (decimal)rng.NextDouble() * 100000,
+                        Timestamp = DateTime.UtcNow
+                    };
+                }
+
+                var jsonArray = JsonSerializer.Serialize(marketDataArray);
+                await Response.WriteAsync($"data:" + "{ \"add\":" + $"{jsonArray}" + "}" + "\n\n");
+                await Response.Body.FlushAsync();
+                await Task.Delay(100, HttpContext.RequestAborted);
             }
-
-            // Serialize the array to JSON
-            var jsonArray = JsonSerializer.Serialize(marketDataArray);
-
-            // Send the array as a single SSE message
-            await Response.WriteAsync($"data: {jsonArray}\n\n");
-            await Response.Body.FlushAsync();
-            await Task.Delay(300, HttpContext.RequestAborted);
         }
-    }
-
-    [HttpPost("send")]
-    public IActionResult ReceiveMarketData([FromBody] MarketData marketData)
-    {
-        if (marketData == null)
+        finally
         {
-            return BadRequest("Invalid market data.");
+            _activeStreams.TryTake(out _);
+        }
+    }
+
+    [HttpPost("update")]
+    public async Task<IActionResult> UpdateMarketData([FromBody] UpdateRequest updateRequest)
+    {
+        if (updateRequest?.MarketData == null)
+        {
+            return BadRequest("Invalid update request.");
         }
 
-        // Process the received market data
-        Console.WriteLine($"Received Market Data: {marketData.Id}, {marketData.Symbol}, {marketData.Price}, {marketData.Timestamp}");
+        if (updateRequest.param == "+")
+        {
+            updateRequest.MarketData.Price += (decimal)rng.NextDouble() * 10;
+        }
 
-        return Ok(new { Message = "Market data received successfully.", Data = marketData });
+        if (updateRequest.param == "-")
+        {
+            updateRequest.MarketData.Price -= (decimal)rng.NextDouble() * 10;
+
+        }
+
+        var jsonUpdate = JsonSerializer.Serialize(updateRequest.MarketData);
+        foreach (var response in _activeStreams.ToArray())
+        {
+            try
+            {
+                await response.WriteAsync($"data:" + "{ \"update\": [" + $"{jsonUpdate}" + "]}" + "\n\n");
+                await response.Body.FlushAsync();
+            }
+            catch
+            {
+                // Remove disconnected clients
+                _activeStreams.TryTake(out _);
+            }
+        }
+
+        return Ok(new { Message = "Market data update sent to streams." });
     }
+
+    // Existing ReceiveMarketData method and other code...
 }
+

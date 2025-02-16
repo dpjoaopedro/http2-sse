@@ -9,13 +9,24 @@ import type {
   GetRowIdParams,
   GridApi,
   GridReadyEvent,
+  RowDataTransaction,
+  ValueFormatterParams,
 } from 'ag-grid-community'; // Column Definition Type Interface
 
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AsyncPipe, NgIf } from '@angular/common';
+import { PipsControlRendererComponent } from '../pips-control-renderer/pips-control-renderer.component';
 
 // Register all Community features
 ModuleRegistry.registerModules([AllCommunityModule]);
+
+function currencyFormatter(params: ValueFormatterParams) {
+  return 'R$' + formatNumber(params.value);
+}
+
+function formatNumber(number: number) {
+  return Math.floor(number).toLocaleString();
+}
 
 @Component({
   selector: 'app-market-data',
@@ -24,20 +35,26 @@ ModuleRegistry.registerModules([AllCommunityModule]);
 })
 export class MarketDataComponent implements OnDestroy {
   colDefs: ColDef[] = [
-    { field: 'Timestamp', sort: 'desc' },
+    { field: 'Timestamp', sort: 'desc'},
     { field: 'Id' },
     { field: 'Symbol' },
-    { field: 'Price' },
+    {
+      field: 'Price',
+      cellRenderer: 'agAnimateShowChangeCellRenderer',
+      valueFormatter: currencyFormatter,
+      filter: 'agNumberColumnFilter',
+    },
+    { field: 'Pips', cellRenderer: PipsControlRendererComponent },
   ];
 
   marketData: any[] = [];
   private dataSubscription!: Subscription;
   private gridApi!: GridApi;
   error$!: Observable<boolean>;
-  size = signal(0);
+  total = signal(0);
+  show = signal(0);
 
-  getRowId: GetRowIdFunc = (params: GetRowIdParams) =>
-    String(params.data.Id);
+  getRowId: GetRowIdFunc = (params: GetRowIdParams) => String(params.data.Id);
 
   constructor(private marketDataService: MarketDataService) {}
 
@@ -49,14 +66,18 @@ export class MarketDataComponent implements OnDestroy {
   onGridReady(params: GridReadyEvent) {
     this.gridApi = params.api;
 
-    this.error$ = this.marketDataService.getError().pipe(tap(console.log));
+    this.error$ = this.marketDataService.getError();
+
+    this.gridApi.setFilterModel({
+      Price: { filterType: 'number', type: 'greaterThan', filter: 100_000 },
+    });
 
     this.dataSubscription = this.marketDataService.getMarketData().subscribe({
-      next: (add: unknown[]) => {
-        this.size.set(this.size() + add.length);
-        this.gridApi.applyTransactionAsync({
-          add,
-        });
+      next: (data: RowDataTransaction) => {
+        this.gridApi.applyTransactionAsync(data);
+        this.show.set(this.gridApi.getDisplayedRowCount());
+        const length = data.add ? data.add.length : data.update?.length;
+        this.total.set(this.total() + length!);
       },
       error: (err) => console.error('SSE error:', err),
     });
@@ -78,4 +99,20 @@ export class MarketDataComponent implements OnDestroy {
       },
     });
   }
+
+   formatNumberWithDots(number: number) {
+    // Convert the number to a string
+    let numStr = number.toString();
+
+    // Split the number into integer and decimal parts (if any)
+    let parts = numStr.split('.');
+    let integerPart = parts[0];
+    let decimalPart = parts.length > 1 ? '.' + parts[1] : '';
+
+    // Add dots as thousand separators
+    integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
+    // Combine the integer and decimal parts
+    return integerPart + decimalPart;
+}
 }
