@@ -1,5 +1,5 @@
-import { Component, OnDestroy, signal } from '@angular/core';
-import { Observable, Subscription, tap } from 'rxjs';
+import { Component, inject, OnDestroy, signal } from '@angular/core';
+import { Observable, Subscription } from 'rxjs';
 import { MarketDataService } from './market-data.service';
 
 import { AgGridAngular } from 'ag-grid-angular'; // Angular Data Grid Component
@@ -10,11 +10,12 @@ import type {
   GridApi,
   GridReadyEvent,
   RowDataTransaction,
+  RowSelectionOptions,
   ValueFormatterParams,
 } from 'ag-grid-community'; // Column Definition Type Interface
 
-import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { AsyncPipe, NgIf } from '@angular/common';
+import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import { PipsControlRendererComponent } from '../pips-control-renderer/pips-control-renderer.component';
 
 // Register all Community features
@@ -34,8 +35,10 @@ function formatNumber(number: number) {
   templateUrl: './market-data.component.html',
 })
 export class MarketDataComponent implements OnDestroy {
+  marketDataService = inject(MarketDataService);
+
   colDefs: ColDef[] = [
-    { field: 'Timestamp', sort: 'desc'},
+    { field: 'Timestamp', sort: 'desc' },
     { field: 'Id' },
     { field: 'Symbol' },
     {
@@ -54,9 +57,13 @@ export class MarketDataComponent implements OnDestroy {
   total = signal(0);
   show = signal(0);
 
-  getRowId: GetRowIdFunc = (params: GetRowIdParams) => String(params.data.Id);
+  rowSelection: RowSelectionOptions | "single" | "multiple" = {
+    mode: 'singleRow',
+    checkboxes: false,
+    enableClickSelection: true,
+  };
 
-  constructor(private marketDataService: MarketDataService) {}
+  getRowId: GetRowIdFunc = (params: GetRowIdParams) => String(params.data.Id);
 
   ngOnDestroy() {
     this.dataSubscription.unsubscribe();
@@ -100,7 +107,7 @@ export class MarketDataComponent implements OnDestroy {
     });
   }
 
-   formatNumberWithDots(number: number) {
+  formatNumberWithDots(number: number) {
     // Convert the number to a string
     let numStr = number.toString();
 
@@ -114,5 +121,5 @@ export class MarketDataComponent implements OnDestroy {
 
     // Combine the integer and decimal parts
     return integerPart + decimalPart;
-}
+  }
 }

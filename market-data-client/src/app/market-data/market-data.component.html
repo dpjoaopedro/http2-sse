@@ -1,8 +1,8 @@
 <h1 *ngIf="error$ | async">CONNECTION LOST!</h1>
 
 <div style="display: flex; justify-content: center; margin-bottom: 13px;">
-    <span>total: {{formatNumberWithDots(total())}} - displayed: {{formatNumberWithDots(show())}}</span>
+    <span>Total: {{formatNumberWithDots(total())}} - Displayed: {{formatNumberWithDots(show())}}</span>
 </div>
 
 <ag-grid-angular style="width: 100%; height: 95vh;" [asyncTransactionWaitMillis]="1300"
-    (gridReady)="onGridReady($event)" [columnDefs]="colDefs" [getRowId]="getRowId" />
+    (gridReady)="onGridReady($event)" [columnDefs]="colDefs" [getRowId]="getRowId" [rowSelection]="rowSelection" />

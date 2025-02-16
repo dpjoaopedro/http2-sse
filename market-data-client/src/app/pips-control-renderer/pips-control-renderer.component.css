@@ -1,0 +1,16 @@
+.nice-button {
+    padding: 10px 20px;
+    font-size: 16px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.increase:hover {
+    background-color: #0056b3;
+}
+
+.decrease:hover {
+    background-color: red;
+}
