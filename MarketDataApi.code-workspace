@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"path": "MarketDataApi"
+		},
+		{
+			"path": "market-data-client"
+		}
+	],
+	"settings": {}
+}
